@@ -45,7 +45,7 @@ def feature_extractions(directory):
     return(features)
 
 if __name__ == "__main__":
-    features = feature_extractions("Flicker8k_Dataset")
+    features = feature_extractions("Flickr8k_Dataset")
     
     #save features for future use.
     with open("features.pkl", "wb") as f:
@@ -388,7 +388,7 @@ def evaluate_model(model, tokenizer, test_caption_dict, test_features, max_lengt
     for i in range(len(samples)):
         photo_id = photo_ids[samples[i]]
         
-        fn = "Flicker8k_Dataset/" + photo_id + '.jpg'
+        fn = "Flickr8k_Dataset/" + photo_id + '.jpg'
         img = keras.preprocessing.image.load_img(fn)
         plt.figure(i+1)
         plt.imshow(img)
