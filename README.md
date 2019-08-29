@@ -1,7 +1,7 @@
 # Image-captioning model based on Flickr8K dataset
 
 ## Objectives:
-To build a simple image-captioning model using pre-trained CNN model and LSTM model, based on the Flickr8K dataset. Please note that this project is not striving for a well-optimized and industrial-level model (thus some of the generated captions are not making sense), but just as an illustration on how to construct a deep image-captioning model (for learning purposes).
+To build a simple image-captioning model using pre-trained CNN model and LSTM model, based on the Flickr8K dataset. This project is primarily for self-learning purpose, on how to build a deep-learning model using Tensorflow.
 
 ## Dataset Descriptions:
 Flickr8K dataset contains 8000 images and their reference captions. Originally, you should download a request form to request for the dataset. However, the official site seems to have been taken down, thus I also include the dataset in this project for downloading.
