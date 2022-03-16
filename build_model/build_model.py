@@ -14,6 +14,7 @@ import keras
 import numpy as np
 import matplotlib.pyplot as plt
 import string
+import json
 from pickle import load, dump
 from nltk.translate.bleu_score import corpus_bleu
 
@@ -52,7 +53,6 @@ if __name__ == "__main__":
     with open("features.pkl", "wb") as f:
        dump(features, f)
    
-
 """
 2. Text data pre-processing.
 """
@@ -190,8 +190,8 @@ if __name__ == "__main__":
     tokenizer = create_tokenizer(train_caption_dict, num_vocab=vocab_size)
     
     #Save the tokenizer for caption_generation
-    with open("../tokenizer.pkl", "wb") as f:
-        dump(tokenizer, f)
+    with open("../tokenizer.json", "w") as f:
+        json.dump(tokenizer.to_json(), f)
     
     print("vocab size: {}".format(vocab_size))
     max_length = max([len(c.split()) for c in caption_to_list(train_caption_dict)]) - 1 #Maximum length of input sequence
@@ -312,7 +312,7 @@ def generate_dataset(caption_dict, features, tokenizer, max_length, vocab_size, 
             tmp_text, tmp_Y = encoded[:-1], encoded[1:]
             padded_text = keras.preprocessing.sequence.pad_sequences([tmp_text], maxlen=max_length, padding='pre')[0]
             padded_Y = keras.preprocessing.sequence.pad_sequences([tmp_Y], maxlen=max_length, padding='pre')[0]
-            padded_Y = keras.utils.to_categorical(padded_Y, num_classes=vocab_size)
+            padded_Y = tf.keras.utils.to_categorical(padded_Y, num_classes=vocab_size)
             
             X_img.append(features[photo_id][0])
             X_text.append(padded_text)
