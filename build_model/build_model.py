@@ -9,6 +9,7 @@ Steps:
 """
 
 import os
+import tensorflow as tf
 import keras
 import numpy as np
 import matplotlib.pyplot as plt
@@ -25,7 +26,7 @@ def feature_extractions(directory):
     Return: A dictionary of features extracted by VGG-16, size 4096.
     """
     
-    model = keras.applications.vgg16.VGG16()
+    model = tf.keras.applications.vgg16.VGG16()
     model = keras.models.Model(inputs=model.input, outputs=model.layers[-2].output) #Remove the final layer
     
     features = {}
@@ -75,32 +76,30 @@ def caption_dictionary(raw_caption):
 
     return(captions)
 
-def cleaning(caption_dict):
+def caption_cleaning(caption_dict):
     """
-    Input: A dictionary of caption_list returned by caption_dictionary()
-    Output: The cleaned caption dictionary
+        Input: caption_directory.
+        Perform text pre-processing for captions
+        Return: caption_directory after pre-processing
     """
     trans_table = str.maketrans('', '', string.punctuation)
     for photo_id, caption_list in caption_dict.items():
         for i in range(len(caption_list)):
             caption = caption_list[i]
-            tmp = caption.split()
+            caption = caption.lower()
+            #caption = re.sub('[^\w\s]', '', caption) #remove punctuation & special character
+            caption = caption.translate(trans_table) #remove punctuation only
             
-            tmp = [t.lower() for t in tmp] #Lower case
-            tmp = [t.translate(trans_table) for t in tmp] #Remove punctuation
-            tmp = [t for t in tmp if len(t) > 1] #Remove words with a single alphabet
-            tmp = [t for t in tmp if t.isalpha()] #Remove words which contain non-alphabet
+            caption_list[i] = caption
             
-            caption_list[i] = ' '.join(tmp)
-
-    return(None)
+    return(caption_dict)
 
 if __name__ == "__main__":
     with open("Flickr8k_text/Flickr8k.token.txt", "r") as f:
         raw_caption = f.read()
         
     caption_dict = caption_dictionary(raw_caption)
-    cleaning(caption_dict)
+    caption_dict = caption_cleaning(caption_dict)
     
     #Save the caption_dict for future use
     with open("captions.pkl", "wb") as f:
@@ -123,7 +122,7 @@ def create_tokenizer(caption_dict, num_vocab=None):
     Input: caption dictionary, num_vocab
     Output: Tokenizer fitted on the captions in the dictionary, with maximum number of vocab = num_vocab
     """
-    tokenizer = keras.preprocessing.text.Tokenizer(num_words=num_vocab)
+    tokenizer = keras.preprocessing.text.Tokenizer(num_words=num_vocab, filters='!"#$%&()*+,-./:;=?@[\\]^_`{|}~\t\n')
     captions = caption_to_list(caption_dict)
             
     tokenizer.fit_on_texts(captions)
@@ -170,7 +169,7 @@ def load_captions(dataset, wrapping = 0):
         for photo_id, caption_list in caption_dict.items():
             for i in range(len(caption_list)):
                 tmp = caption_list[i].split()
-                caption_list[i] = 'startseq ' + ' '.join(tmp) + ' endseq'
+                caption_list[i] = '<startseq> ' + ' '.join(tmp) + ' <endseq>'
     
     return(caption_dict)
 
@@ -187,17 +186,7 @@ if __name__ == "__main__":
     test_features = load_features(test)
     
     #Initialize the tokenizer
-    tokenizer = create_tokenizer(train_caption_dict)
-    
-    #Count the number of words that is present above the min_freq, contain only those vocab in tokenizer
-    min_freq = 2
-    words = []
-    for word, count in tokenizer.word_counts.items():
-        if count >= min_freq:
-            words.append(word)
-    vocab_size = len(words) + 1 #Number of vocabulary (including zero index)
-    
-    #Re-initialize the tokenizer with size of vocabulary = vocab_size
+    vocab_size = 3001
     tokenizer = create_tokenizer(train_caption_dict, num_vocab=vocab_size)
     
     #Save the tokenizer for caption_generation
@@ -209,27 +198,77 @@ if __name__ == "__main__":
     print("max length: {}".format(max_length))
 
 """
+Load the pre-trained embeddings from GloVe
+"""
+#Check coverage
+def check_coverage(tokenizer, coverage, vocab_size):
+    iw = tokenizer.index_word
+    wc = tokenizer.word_counts
+    
+    coverage_vocab = 0
+    coverage_count = 0
+    total_count = 0
+    oov = dict()
+    for i in range(1, vocab_size):
+        w = iw[i]
+        if w in coverage:
+            coverage_vocab += 1
+            coverage_count += wc[w]
+        else:
+            oov[w] = wc[w]
+        total_count += wc[w]
+        
+    print("Coverage in vocab: {}".format(coverage_vocab / vocab_size))
+    print("Coverage in word_count: {}".format(coverage_count / total_count))
+    return(oov)
+
+if __name__ == "__main__":
+    path_to_glove_file = "./glove.6B/glove.6B.100d.txt"
+    
+    embeddings_index = {}
+    with open(path_to_glove_file, 'r', encoding='utf-8') as f:
+        for line in f:
+            word, coefs = line.split(maxsplit=1)
+            coefs = np.fromstring(coefs, "f", sep=" ")
+            embeddings_index[word] = coefs
+    
+    #Initialize embedding matrix
+    embed_dim = 100
+    embedding_matrix = np.zeros((vocab_size, embed_dim))
+    coverage = set()
+    for i in range(1, vocab_size):
+        w = tokenizer.index_word[i]
+        if w in embeddings_index.keys():
+            embedding_matrix[i] = embeddings_index.get(w) #use the pre-trained embeddings, set 0 otherwise
+            coverage.add(w)
+            
+    oov = check_coverage(tokenizer, coverage, vocab_size=vocab_size)
+    print(oov)
+
+"""
 3. Build the deep-learning model.
 """
 #Model definition
-def define_model(max_length, vocab_size):
+def define_model(max_length, vocab_size, dp_rate=0.1, embed_size=100, embedding_matrix=None):
     img_inputs = keras.layers.Input(shape=(4096,))
-    img_dp1 = keras.layers.Dropout(rate=0.2)(img_inputs)
-    img_dense = keras.layers.Dense(128)(img_dp1)
+    img_dp1 = keras.layers.Dropout(rate=dp_rate)(img_inputs)
+    img_dense = keras.layers.Dense(64)(img_dp1)
     img_bn1 = keras.layers.BatchNormalization()(img_dense)
     img_outputs = keras.layers.Activation(activation='relu')(img_bn1)
     #RepeatVector for matching timestep
     img_rep = keras.layers.RepeatVector(n=max_length)(img_outputs)
     
     text_inputs = keras.layers.Input(shape=(max_length,))
-    text_embed = keras.layers.Embedding(input_dim=vocab_size, output_dim=256, mask_zero=True)(text_inputs)
-    text_dp1 = keras.layers.Dropout(rate=0.2)(text_embed)
-    text_lstm = keras.layers.LSTM(128, return_sequences=True)(text_dp1)
+    text_embed = keras.layers.Embedding(input_dim=vocab_size, 
+                                        output_dim=embed_size, 
+                                        mask_zero=True)(text_inputs)
+    text_dp1 = keras.layers.Dropout(rate=dp_rate)(text_embed)
+    text_lstm = keras.layers.LSTM(64, return_sequences=True)(text_dp1)
     
     decoder_inputs = keras.layers.Concatenate()([img_rep, text_lstm])
-    decoder_dp1 = keras.layers.Dropout(rate=0.5, noise_shape=(None, 1, 256))(decoder_inputs)
+    decoder_dp1 = keras.layers.Dropout(rate=dp_rate, noise_shape=(None, 1, 128))(decoder_inputs)
     decoder_dense1 = keras.layers.Dense(256)(decoder_dp1)
-    decoder_dp2 = keras.layers.Dropout(rate=0.5, noise_shape=(None, 1, 256))(decoder_dense1)
+    decoder_dp2 = keras.layers.Dropout(rate=dp_rate, noise_shape=(None, 1, 256))(decoder_dense1)
     decoder_relu1 = keras.layers.Activation(activation='relu')(decoder_dp2)
     decoder_outputs = keras.layers.Dense(vocab_size, activation='softmax')(decoder_relu1)
     
@@ -294,13 +333,13 @@ def generate_dataset(caption_dict, features, tokenizer, max_length, vocab_size, 
 
 #Training:
 if __name__ == "__main__":                
-    num_epoches = 20
+    num_epoches = 10
     num_photos = 32 #photos per batch
     
     steps_per_epoch = int(len(train_caption_dict) / num_photos)
     val_steps = int(len(dev_caption_dict) / num_photos)
     
-    model = define_model(max_length, vocab_size)
+    model = define_model(max_length, vocab_size, dp_rate=0.1, embed_size=embed_dim, embedding_matrix=None)
     
     train_generator = generate_dataset(train_caption_dict, train_features, tokenizer, max_length, vocab_size, num_photos)
     dev_generator = generate_dataset(dev_caption_dict, dev_features, tokenizer, max_length, vocab_size, num_photos)
@@ -312,7 +351,7 @@ if __name__ == "__main__":
         dev_loss = model.evaluate_generator(dev_generator, steps = val_steps, verbose=1)
         print("The dev_loss at {i}-th epoch: {dev_loss}".format(i=i, dev_loss=np.round(dev_loss,2)))
         
-        model.save("../model/model_v{i}_devloss_{d}_trainloss_{t}.h5".format(i=i, d=np.round(dev_loss[0], 2), t=np.round(train_loss, 2)))
+        model.save("../model/model_v{i}.h5".format(i=i))
 
 """
 5. Model Evaluation.
@@ -326,7 +365,7 @@ def sample_caption(model, tokenizer, max_length, vocab_size, feature):
     Return: A generated caption of that photo feature. Remove the startseq and endseq token.
     """
     
-    caption = "startseq"
+    caption = "<startseq>"
     while 1:
         #Prepare input to model
         encoded = tokenizer.texts_to_sequences([caption])[0]
@@ -340,12 +379,12 @@ def sample_caption(model, tokenizer, max_length, vocab_size, feature):
         caption = caption + ' ' + next_word
         
         #Terminate condition: caption length reaches maximum / reach endseq
-        if next_word == 'endseq' or len(caption.split()) >= max_length:
+        if next_word == '<endseq>' or len(caption.split()) >= max_length:
             break
     
     #Remove the (startseq, endseq)
-    caption = caption.replace('startseq ', '')
-    caption = caption.replace(' endseq', '')
+    caption = caption.replace('<startseq> ', '')
+    caption = caption.replace(' <endseq>', '')
     
     return(caption)
 
