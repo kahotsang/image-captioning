@@ -3,6 +3,8 @@
 ## Objectives:
 To build a simple image-captioning model using pre-trained CNN model and LSTM model, based on the Flickr8K dataset. This project is primarily for self-learning purpose, on how to build a deep-learning model using Tensorflow.
 
+Update: Use pre-trained word embeddings (GloVe 100D)
+
 ## Dataset Descriptions:
 Flickr8K dataset contains 8000 images and their reference captions. Originally, you should download a request form to request for the dataset. However, the official site seems to have been taken down, thus I also include the dataset in this project for downloading.
 
@@ -25,6 +27,8 @@ caption_generator.py: It contains the code to use the built model to generate ca
 ## Installation Requirement:
 In this project, I use python and Tensorflow (Keras) to build the deep-learning model. Please make sure that you have Tensorflow (no need to have GPU version) installed in your computer.
 
+To build the model, you need to further download the GloVe word embeddings via [link](https://nlp.stanford.edu/projects/glove/). Please refer to glove.6B --> 100D.
+
 ## Methodology
 For the architecture of the image-captioning model, I stick with the merge model implementation proposed by Tanti, et al. (2017). Please refer to [this paper](https://arxiv.org/abs/1703.09137) for more details.
 
@@ -34,8 +38,6 @@ For the architecture of the image-captioning model, I stick with the merge model
 2. Not only use the pre-trained CNN model as feature extractor, but also fine-tune it during training.
 
 3. Consider using other pre-trained CNN model.
-
-4. Use pre-trained word2vec model instead of training the embedding layer from scratch.
 
 ## References
 M. Tanti, A. Gatt and K.P. Camilleri (2017). Where to put the Image in an Image Caption Generator. arXiv: https://arxiv.org/abs/1703.09137
