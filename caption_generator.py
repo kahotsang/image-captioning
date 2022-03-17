@@ -7,18 +7,21 @@ and return the captions.
 
 import os
 import keras
+from keras.preprocessing.text import tokenizer_from_json
 import numpy as np
 import matplotlib.pyplot as plt
-from build_model.build_model import feature_extractions, sample_caption
+from build_model.build import feature_extractions, sample_caption
+import json
 from pickle import load, dump
     
 #Load tokenizer
-with open("./tokenizer.pkl", "rb") as f:
-    tokenizer = load(f)
+with open('tokenizer.json', 'r') as f:
+    tokenizer_json = json.load(f)
+tokenizer = tokenizer_from_json(tokenizer_json)
     
 model = keras.models.load_model("./sample_model.h5") #Load model
 vocab_size = tokenizer.num_words #The number of vocabulary
-max_length = 33 #Maximum length of caption sequence
+max_length = 37 #Maximum length of caption sequence
 
 #sampling
 features = feature_extractions("./sample_images")
